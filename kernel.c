@@ -365,7 +365,7 @@ int applySobelPgm(char* inputFileName, char* outputFileName) {
   }
   free(verPrewittArr);
   free(horPrewittArr);
-  pixelValues = filterSlice(filteredIntegers, width-padding*2, height-padding*2);
+  pixelValues = filterMinMax(filteredIntegers, width-padding*2, height-padding*2);
   free(filteredIntegers);
   pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
   writeArrToPgm(pixelValues, width, height, outputFileName, 2);
@@ -729,18 +729,7 @@ uint8_t* filterMinMax(int* arrValues, int width, int height) {
       srcMax = arrValues[i];
   }
   if (srcMax == srcMin) {
-    if (srcMin <= 255 && srcMin >= 0) {
-      for (i = 0; i < width*height; i++)
-        outputPixValues[i] = arrValues[i];
-    } else if (srcMin >= 255) {
-      memset(outputPixValues, 255, width*height);
-    } else {
-      memset(outputPixValues, 0, width*height);
-    }
-    return outputPixValues;
-  } else if (srcMin <= 255 && srcMax >= 0) {
-    for (i = 0; i < width*height; i++)
-      outputPixValues[i] = arrValues[i];
+    memset(outputPixValues, 0, width*height);
     return outputPixValues;
   }
   srcScale = srcMax - srcMin;
