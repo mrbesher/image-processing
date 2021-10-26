@@ -29,10 +29,27 @@ typedef struct {
   int* matrix;
 } mask;
 
+/*
+* Struct: kernelSettings
+* --------------------------
+*
+* paddingType: 0 for zero-padding 1 for mirror padding
+* normalizationType: 0 for slicing 1 for minMax
+* postPadding: apply padding after kernel if true before if false
+* coefficient: a float to be multiplied with the kernel
+*/
+typedef struct {
+  int paddingType;
+  int normalizationType;
+  bool postPadding;
+  float coefficient;
+} kernel_settings;
+
 //generic functions
 void setColor(int);
 void removeExtension(char*, char*);
 bool isSpace(char);
+bool isIntegerStr(char*);
 int* staticToDynamicKernel(int[], int);
 void help();
 
@@ -56,12 +73,16 @@ void setPaddingMirror(uint8_t*, int, int, int);
 uint8_t* addStaticPad(uint8_t*, uint8_t, int, int, int);
 bool doesKernelFit(int, int, int);
 bool processInput(char*);
+int processCustomKernel(char*, char*);
 
 //kernel-specific functions
 int applyVerPrewittPgm(char*, char*);
 int* applyPrewittVertical(uint8_t*, int, int, bool);
 int* applyPrewittHorizontal(uint8_t*, int, int, bool);
 int applySobelPgm(char*, char*);
+int applyCustomKernelPgm(mask*, kernel_settings*, char*, char*);
+int* applyCustomKernel(mask*, float, uint8_t*, int, int, bool);
+
 
 int main(int argc, char const *argv[]) {
   char* inputStr = (char*) malloc(INPUT_SIZE * sizeof(char));
@@ -81,6 +102,7 @@ void help() {
           "help\t\t\t\t\t- prints available commands\n"
           "verprewitt input.pgm [output.pgm]\t- applies prewitt vertical operator to input.pgm\n"
           "sobel input.pgm [output.pgm]\t\t- applies sobel filter to input.pgm\n"
+          "custom input.pgm [output.pgm]\t\t- applies a custom filter to input.pgm\n"
           "exit\t\t\t\t\t- quits the program\n"
         );
 }
@@ -140,6 +162,23 @@ bool processInput(char* inputStr) {
       printf("Tip: type 'help' for usage\n");
       setColor(RESET);
     }
+  } else if (!strcmp(arg[i], "custom")) {
+    i++;
+    if (strcmp(arg[i++], "NULL")) {
+      if (strcmp(arg[i], "NULL")) {
+        processCustomKernel(arg[i-1], arg[i]);
+      } else {
+        removeExtension(arg[i-1], arg[i]);
+        strcat(arg[i], "_custom.pgm");
+        processCustomKernel(arg[i-1], arg[i]);
+      }
+    } else {
+      setColor(RED);
+      printf("Error: no input provided\n");
+      setColor(YELLOW);
+      printf("Tip: type 'help' for usage\n");
+      setColor(RESET);
+    }
   } else {
     setColor(YELLOW);
     printf("Cannot recognise command '%s'\n", arg[i]);
@@ -152,6 +191,148 @@ bool processInput(char* inputStr) {
   }
   free(arg);
   return shouldCont;
+}
+
+int processCustomKernel(char* inputFileName, char* outputFileName) {
+  size_t i, j;
+  mask* kernel = (mask*) malloc(sizeof(kernel));
+  kernel_settings* settings = (kernel_settings*) malloc(sizeof(kernel_settings));
+  char* inputStr = (char*) malloc(INPUT_SIZE * sizeof(char));
+  kernel->size = 0;
+  do {
+    printf("Enter kernel size (grater than 0 and odd): ");
+    fgets(inputStr, INPUT_SIZE, stdin);
+    strtok(inputStr, "\n");
+    if (isIntegerStr(inputStr))
+      kernel->size = atoi(inputStr);
+  } while(!(kernel->size > 0 && (kernel->size)%2));
+  kernel->matrix = (int*) malloc((kernel->size)*(kernel->size)*sizeof(int));
+  printf("Enter kernel values:\n");
+  for (i = 0; i < kernel->size; i++) {
+    for (j = 0; j < kernel->size; j++) {
+      printf("[%ld][%ld]:", i+1,j+1);
+      fgets(inputStr, INPUT_SIZE, stdin);
+      strtok(inputStr, "\n");
+      while (!isIntegerStr(inputStr)) {
+        printf("[%ld][%ld]:", i+1,j+1);
+        fgets(inputStr, INPUT_SIZE, stdin);
+        strtok(inputStr, "\n");
+      }
+      (kernel->matrix)[i*(kernel->size)+j] = atoi(inputStr);
+    }
+  }
+  setColor(YELLOW);
+  printf("Press Enter to keep (current setting)\n");
+  setColor(RESET);
+  settings->paddingType = 0;
+  printf("(zero-padding) apply mirror padding instead? (y/n): ");
+  fgets(inputStr, INPUT_SIZE, stdin);
+  strtok(inputStr, "\n");
+  if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
+    settings->paddingType = 1;
+  }
+  settings->postPadding=true;
+  printf("(post-padding) apply padding before kernel instead? (y/n): ");
+  fgets(inputStr, INPUT_SIZE, stdin);
+  strtok(inputStr, "\n");
+  if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
+    settings->postPadding = false;
+  }
+  settings->normalizationType=1;
+  printf("(min-max) apply slicing normalization instead? (y/n): ");
+  fgets(inputStr, INPUT_SIZE, stdin);
+  strtok(inputStr, "\n");
+  if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
+    settings->normalizationType = 0;
+  }
+  settings->coefficient=1;
+  printf("(1) kernel's coefficient value: ");
+  fgets(inputStr, INPUT_SIZE, stdin);
+  strtok(inputStr, "\n");
+  if (strcmp(inputStr, "\n")) {
+    while (sscanf(inputStr, "%f", &(settings->coefficient)) == EOF) {
+      setColor(YELLOW);
+      printf("'%s' couldn't be processed as a float\n", inputStr);
+      setColor(RESET);
+      printf("kernel's coefficient value: ");
+      fgets(inputStr, INPUT_SIZE, stdin);
+      strtok(inputStr, "\n");
+    }
+  }
+  applyCustomKernelPgm(kernel, settings, inputFileName, outputFileName);
+  free(kernel->matrix);
+  free(inputStr);
+  free(settings);
+  free(kernel);
+  return 0;
+}
+
+int applyCustomKernelPgm(mask* kernel, kernel_settings* settings, char* inputFileName, char* outputFileName) {
+  uint8_t *arr, *pixelValues;
+  int width, height, *filteredIntegers, padding, kernelSize = 3;
+  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  if (!arr) {
+    setColor(YELLOW);
+    printf("Trying ASCII pgm format...\n");
+    setColor(RESET);
+    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+  }
+  if (!arr)
+    return 1;
+  uint8_t* (*normalizeValues)(int*, int, int) = filterSlice;
+  filteredIntegers = applyCustomKernel(kernel, settings->coefficient, arr, width, height, settings->postPadding);
+  free(arr);
+  if (settings->postPadding) {
+    padding = (kernelSize>>1);
+  } else {
+    padding = 0;
+  }
+  if (settings->normalizationType)
+    normalizeValues = filterMinMax;
+  pixelValues = normalizeValues(filteredIntegers, width-padding*2, height-padding*2);
+  free(filteredIntegers);
+  pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
+  if (settings->paddingType == 1)
+    setPaddingMirror(pixelValues, width, height, kernel->size);
+  writeArrToPgm(pixelValues, width, height, outputFileName, 2);
+  free(pixelValues);
+  return 0;
+}
+
+/*
+* Function: applyCustomKernel
+* --------------------------
+* returns a pointer to an array with custom filter applied
+*
+* kernel: a mask struct containing the mask that will be applied
+* pixelValues: pointer to the array representing image that will be processed
+* width: image width without padding
+* height: image height without padding
+* postPadding: a bool value indicating whether the padding will be applied
+* before (false) or after (true) kernel
+*
+* returns: a pointer to the newly allocated array after processing
+*/
+int* applyCustomKernel(mask* kernel, float coefficient, uint8_t* pixelValues, int width, int height, bool postPadding) {
+  int padding, *filteredValues;
+  uint8_t *pixelValuesCopy;
+  if (!doesKernelFit(kernel->size, width, height) && !postPadding) {
+    setColor(RED);
+    printf("Kernel too be big to be applied without pre-padding\n");
+    setColor(RESET);
+    return NULL;
+  }
+  pixelValuesCopy = (uint8_t*) malloc(width * height * sizeof(uint8_t));
+  memcpy(pixelValuesCopy, pixelValues, width*height * sizeof(uint8_t));
+  if (!postPadding) {
+    pixelValuesCopy = addStaticPad(pixelValuesCopy, coefficient, width, height, kernel->size);
+    padding = ((kernel->size)>>1);
+  } else {
+    padding = 0;
+  }
+  filteredValues = applyKernelArr(kernel->matrix, kernel->size, 1, pixelValuesCopy, width+padding*2, height+padding*2);
+  free(pixelValuesCopy);
+  return filteredValues;
 }
 
 int applySobelPgm(char* inputFileName, char* outputFileName) {
@@ -696,6 +877,15 @@ size_t fwritePixels(const void *ptr, size_t size, size_t nmemb, FILE *picture) {
 
 bool isSpace(char c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+bool isIntegerStr(char* str) {
+  int i = 0;
+  if (str[i]=='-')
+    i++;
+  while (str[i] && str[i] >= '0' && str[i] <= '9')
+    i++;
+  return str[i] == '\0';
 }
 
 void skipComments(FILE* file) {
