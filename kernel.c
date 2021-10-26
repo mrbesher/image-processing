@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <math.h>
 
 //color codes
 #define RED 31
@@ -16,16 +17,24 @@
 //constants
 #define MIN_KERNEL_SIZE 3
 #define LINE_SIZE 100
+#define INPUT_SIZE 500
+#define MAX_ARG_NUMBER 5
 #define PADDING_VALUE 0
 #define MAGIC_NUMBER_SIZE 3
 #define MAX_PIXEL_VAL 255
 #define BRAND_NAME "Besher"
+
+typedef struct {
+  int size;
+  int* matrix;
+} mask;
 
 //generic functions
 void setColor(int);
 void removeExtension(char*, char*);
 bool isSpace(char);
 int* staticToDynamicKernel(int[], int);
+void help();
 
 //generic PGM functions
 bool isBinaryPgm(FILE*);
@@ -46,23 +55,162 @@ uint8_t* filterMinMax(int*, int, int);
 void setPaddingMirror(uint8_t*, int, int, int);
 uint8_t* addStaticPad(uint8_t*, uint8_t, int, int, int);
 bool doesKernelFit(int, int, int);
+bool processInput(char*);
 
 //kernel-specific functions
-uint8_t* applyPrewittVertical(uint8_t*, int, int, bool);
-
+int applyVerPrewittPgm(char*, char*);
+int* applyPrewittVertical(uint8_t*, int, int, bool);
+int* applyPrewittHorizontal(uint8_t*, int, int, bool);
+int applySobelPgm(char*, char*);
 
 int main(int argc, char const *argv[]) {
+  char* inputStr = (char*) malloc(INPUT_SIZE * sizeof(char));
+  printf("Welcome to Stipant\n");
+  help();
+  do {
+    printf("> ");
+    fgets(inputStr, INPUT_SIZE, stdin);
+  } while(processInput(inputStr));
+  free(inputStr);
+  return 0;
+}
+
+void help() {
+  printf(
+          "Here are the commands you can use:\n"
+          "help\t\t\t\t\t- prints available commands\n"
+          "verprewitt input.pgm [output.pgm]\t- applies prewitt vertical operator to input.pgm\n"
+          "sobel input.pgm [output.pgm]\t\t- applies sobel filter to input.pgm\n"
+          "exit\t\t\t\t\t- quits the program\n"
+        );
+}
+
+bool processInput(char* inputStr) {
+  int i;
+  char* strPointer;
+  bool shouldCont = true;
+  char** arg = (char**) malloc(MAX_ARG_NUMBER * sizeof(char*));
+  for (i = 0; i < MAX_ARG_NUMBER; i++) {
+    arg[i] = (char*) malloc(LINE_SIZE * sizeof(char));
+    strcpy(arg[i],"NULL");
+  }
+  i = 0;
+  strPointer = strtok(inputStr, " ");
+  strcpy(arg[i++], strPointer);
+  while ((strPointer = strtok(NULL, " "))) {
+    strcpy(arg[i++], strPointer);
+  }
+  strtok(arg[i -1], "\n");
+  i=0;
+  if (!strcmp(arg[i], "exit")) {
+    shouldCont = false;
+  } else if (!strcmp(arg[i], "help")) {
+    help();
+  } else if (!strcmp(arg[i], "verprewitt")) {
+    i++;
+    if (strcmp(arg[i++], "NULL")) {
+      if (strcmp(arg[i], "NULL")) {
+        applyVerPrewittPgm(arg[i-1], arg[i]);
+      } else {
+        removeExtension(arg[i-1], arg[i]);
+        strcat(arg[i], "_verprewitt.pgm");
+        applyVerPrewittPgm(arg[i-1], arg[i]);
+      }
+    } else {
+      setColor(RED);
+      printf("Error: no input provided\n");
+      setColor(YELLOW);
+      printf("Tip: type 'help' for usage\n");
+      setColor(RESET);
+    }
+  } else if (!strcmp(arg[i], "sobel")) {
+    i++;
+    if (strcmp(arg[i++], "NULL")) {
+      if (strcmp(arg[i], "NULL")) {
+        applySobelPgm(arg[i-1], arg[i]);
+      } else {
+        removeExtension(arg[i-1], arg[i]);
+        strcat(arg[i], "_sobel.pgm");
+        applySobelPgm(arg[i-1], arg[i]);
+      }
+    } else {
+      setColor(RED);
+      printf("Error: no input provided\n");
+      setColor(YELLOW);
+      printf("Tip: type 'help' for usage\n");
+      setColor(RESET);
+    }
+  } else {
+    setColor(YELLOW);
+    printf("Cannot recognise command '%s'\n", arg[i]);
+    printf("Tip: type 'help' for usage\n");
+    setColor(RESET);
+  }
+
+  for (i = 0; i < MAX_ARG_NUMBER; i++) {
+    free(arg[i]);
+  }
+  free(arg);
+  return shouldCont;
+}
+
+int applySobelPgm(char* inputFileName, char* outputFileName) {
   uint8_t *arr, *pixelValues;
-  int width, height, *arrValues;
-  int kernelSize = 3;
-  arr = rBinaryPgmPad(argv[1], &width, &height, 0);
-  if (!arr)
-    arr = rAsciiPgmPad(argv[1], &width, &height, 0);
+  int width, height, widthNoPad, heightNoPad, xDirValue, yDirValue, *verPrewittArr,
+      *horPrewittArr, *filteredIntegers, padding, kernelSize = 3;
+  size_t i, j;
+  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  if (!arr) {
+    setColor(YELLOW);
+    printf("Trying ASCII pgm format...\n");
+    setColor(RESET);
+    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+  }
   if (!arr)
     return 1;
-  pixelValues = applyPrewittVertical(arr, width, height, true);
+  verPrewittArr = applyPrewittVertical(arr, width, height, true);
+  horPrewittArr = applyPrewittHorizontal(arr, width, height, true);
   free(arr);
-  writeArrToPgm(pixelValues, width, height, argv[2], 2);
+  padding = (kernelSize>>1);
+  widthNoPad = width-padding*2;
+  heightNoPad = height-padding*2;
+  filteredIntegers = (int*) malloc(widthNoPad*heightNoPad*sizeof(int));
+  for (i = 0; i < heightNoPad; i++) {
+    for (j = 0; j < widthNoPad; j++) {
+      xDirValue = horPrewittArr[i*widthNoPad+j];
+      yDirValue = verPrewittArr[i*widthNoPad+j];
+      filteredIntegers[i*widthNoPad + j] = sqrt(xDirValue*xDirValue+yDirValue*yDirValue);
+    }
+  }
+  free(verPrewittArr);
+  free(horPrewittArr);
+  pixelValues = filterSlice(filteredIntegers, width-padding*2, height-padding*2);
+  free(filteredIntegers);
+  pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
+  writeArrToPgm(pixelValues, width, height, outputFileName, 2);
+  free(pixelValues);
+  return 0;
+}
+
+int applyVerPrewittPgm(char* inputFileName, char* outputFileName) {
+  uint8_t *arr, *pixelValues;
+  int width, height, *filteredIntegers, padding, kernelSize = 3;
+  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  if (!arr) {
+    setColor(YELLOW);
+    printf("Trying ASCII pgm format...\n");
+    setColor(RESET);
+    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+  }
+  if (!arr)
+    return 1;
+  filteredIntegers = applyPrewittVertical(arr, width, height, true);
+  free(arr);
+  padding = (kernelSize>>1);
+  pixelValues = filterSlice(filteredIntegers, width-padding*2, height-padding*2);
+  free(filteredIntegers);
+  pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
+  writeArrToPgm(pixelValues, width, height, outputFileName, 2);
   free(pixelValues);
   return 0;
 }
@@ -80,10 +228,10 @@ int main(int argc, char const *argv[]) {
 *
 * returns: a pointer to the newly allocated array after processing
 */
-uint8_t* applyPrewittVertical(uint8_t* pixelValues, int width, int height, bool postPadding) {
+int* applyPrewittVertical(uint8_t* pixelValues, int width, int height, bool postPadding) {
   int staticKernel[3*3] = {1, 1, 1, 0, 0, 0, -1, -1, -1};
   int kernelSize = 3, *kernel, padding, *filteredValues;
-  uint8_t *pixelValuesCopy, *filteredPixels;
+  uint8_t *pixelValuesCopy;
   if (!doesKernelFit(kernelSize, width, height) && !postPadding) {
     setColor(RED);
     printf("Kernel too be big to be applied without pre-padding\n");
@@ -101,14 +249,46 @@ uint8_t* applyPrewittVertical(uint8_t* pixelValues, int width, int height, bool 
   }
   filteredValues = applyKernelArr(kernel, kernelSize, 1, pixelValuesCopy, width+padding*2, height+padding*2);
   free(pixelValuesCopy);
-  padding = (kernelSize>>1);
-  filteredPixels = filterSlice(filteredValues, width-padding*2, height-padding*2);
-  free(filteredValues);
-  if (postPadding) {
-    filteredPixels = addStaticPad(filteredPixels, 0, width-padding*2, height-padding*2, kernelSize);
-  }
   free(kernel);
-  return filteredPixels;
+  return filteredValues;
+}
+
+/*
+* Function: applyPrewittHorizontal
+* --------------------------
+* returns a pointer to an array with horizontal edge detection filter applied
+*
+* pixelValues: pointer to the array representing image that will be processed
+* width: image width without padding
+* height: image height without padding
+* postPadding: a bool value indicating whether the padding will be applied
+* before (false) or after (true) kernel
+*
+* returns: a pointer to the newly allocated array after processing
+*/
+int* applyPrewittHorizontal(uint8_t* pixelValues, int width, int height, bool postPadding) {
+  int staticKernel[3*3] = {1, 0, -1, 1, 0, -1, 1, 0, -1};
+  int kernelSize = 3, *kernel, padding, *filteredValues;
+  uint8_t *pixelValuesCopy;
+  if (!doesKernelFit(kernelSize, width, height) && !postPadding) {
+    setColor(RED);
+    printf("Kernel too be big to be applied without pre-padding\n");
+    setColor(RESET);
+    return NULL;
+  }
+  kernel = staticToDynamicKernel(staticKernel, kernelSize);
+  pixelValuesCopy = (uint8_t*) malloc(width * height * sizeof(uint8_t));
+  memcpy(pixelValuesCopy, pixelValues, width*height * sizeof(uint8_t));
+  if (!postPadding) {
+    pixelValuesCopy = addStaticPad(pixelValuesCopy, 0, width, height, kernelSize);
+    padding = (kernelSize>>1);
+  } else {
+    padding = 0;
+  }
+  filteredValues = applyKernelArr(kernel, kernelSize, 1, pixelValuesCopy, width+padding*2, height+padding*2);
+  free(pixelValuesCopy);
+  free(kernel);
+  return filteredValues;
 }
 
 uint8_t* rBinaryPgmPad(char* fileName, int* width, int* height, int kernelSize) {
@@ -495,7 +675,7 @@ bool writeArrToPgm(uint8_t* pixelValues, int width, int height, char* outputName
   if (version == 2) {
     writepixPtr = fwritePixels;
   }
-  fprintf(picture, "# decompressed by %s\n", BRAND_NAME);
+  fprintf(picture, "# processed by %s\n", BRAND_NAME);
   fprintf(picture, "%d %d\n", width, height);
   fprintf(picture, "255\n");
   writepixPtr(pixelValues, sizeof(uint8_t), width * height, picture);
