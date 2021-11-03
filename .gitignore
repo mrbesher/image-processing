@@ -1,0 +1,6 @@
+venv/
+assets/pgms/private/
+startjupyter.sh
+test
+.ipynb_checkpoints
+__pycache__/

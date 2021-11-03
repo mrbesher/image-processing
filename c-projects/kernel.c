@@ -225,21 +225,21 @@ int processCustomKernel(char* inputFileName, char* outputFileName) {
   printf("Press Enter to keep (current setting)\n");
   setColor(RESET);
   settings->paddingType = 0;
-  printf("(zero-padding) apply mirror padding instead? (y/n): ");
+  printf("(zero-padding) apply mirror padding instead? [y/N]: ");
   fgets(inputStr, INPUT_SIZE, stdin);
   strtok(inputStr, "\n");
   if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
     settings->paddingType = 1;
   }
   settings->postPadding=true;
-  printf("(post-padding) apply padding before kernel instead? (y/n): ");
+  printf("(post-padding) apply padding before kernel instead? [y/N]: ");
   fgets(inputStr, INPUT_SIZE, stdin);
   strtok(inputStr, "\n");
   if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
     settings->postPadding = false;
   }
   settings->normalizationType=1;
-  printf("(min-max) apply slicing normalization instead? (y/n): ");
+  printf("(min-max) apply slicing normalization instead? [y/N]: ");
   fgets(inputStr, INPUT_SIZE, stdin);
   strtok(inputStr, "\n");
   if (!strcmp(inputStr, "y") || !strcmp(inputStr, "Y")) {
