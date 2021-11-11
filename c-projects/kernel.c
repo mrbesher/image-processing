@@ -49,9 +49,17 @@ typedef struct {
 void setColor(int);
 void removeExtension(char*, char*);
 bool isSpace(char);
+void swap(uint8_t*, uint8_t*);
 bool isIntegerStr(char*);
 int* staticToDynamicKernel(int[], int);
 void help();
+
+//quick select functions
+/* Reference: https://www.geeksforgeeks.org/median-of-an-unsorted-array-in-liner-time-on/ */
+int partition(uint8_t*, int, int);
+int randomPartition(uint8_t*, int, int);
+void medianUtil(uint8_t*, int, int, int, int*, int*);
+uint8_t findMedian(uint8_t*, int);
 
 //generic PGM functions
 bool isBinaryPgm(FILE*);
@@ -80,13 +88,19 @@ int applyVerPrewittPgm(char*, char*);
 int* applyPrewittVertical(uint8_t*, int, int, bool);
 int* applyPrewittHorizontal(uint8_t*, int, int, bool);
 int applySobelPgm(char*, char*);
+int applyAvgPgm(char*, char*);
+int* applyAveraging(uint8_t*, int, int, bool);
 int applyCustomKernelPgm(mask*, kernel_settings*, char*, char*);
 int* applyCustomKernel(mask*, float, uint8_t*, int, int, bool);
+int applyMedianPgm(char*, char*);
+uint8_t* applyMedian(uint8_t*, int, int, bool);
+uint8_t* applyMedianArr(int, uint8_t*, int, int);
+uint getMedianForPix(uint8_t*, int, uint8_t*, int, size_t, size_t);
 
 
 int main(int argc, char const *argv[]) {
   char* inputStr = (char*) malloc(INPUT_SIZE * sizeof(char));
-  printf("Welcome to Stipant\n");
+  printf("Welcome to " BRAND_NAME "\n");
   help();
   do {
     printf("> ");
@@ -100,6 +114,8 @@ void help() {
   printf(
           "Here are the commands you can use:\n"
           "help\t\t\t\t\t- prints available commands\n"
+          "avg input.pgm [output.pgm]\t\t- applies averaging filter to input.pgm\n"
+          "median input.pgm [output.pgm]\t\t- applies median filter to input.pgm\n"
           "verprewitt input.pgm [output.pgm]\t- applies prewitt vertical operator to input.pgm\n"
           "sobel input.pgm [output.pgm]\t\t- applies sobel filter to input.pgm\n"
           "custom input.pgm [output.pgm]\t\t- applies a custom filter to input.pgm\n"
@@ -128,6 +144,40 @@ bool processInput(char* inputStr) {
     shouldCont = false;
   } else if (!strcmp(arg[i], "help")) {
     help();
+  } else if (!strcmp(arg[i], "avg")) {
+    i++;
+    if (strcmp(arg[i++], "NULL")) {
+      if (strcmp(arg[i], "NULL")) {
+        applyAvgPgm(arg[i-1], arg[i]);
+      } else {
+        removeExtension(arg[i-1], arg[i]);
+        strcat(arg[i], "_avg.pgm");
+        applyAvgPgm(arg[i-1], arg[i]);
+      }
+    } else {
+      setColor(RED);
+      printf("Error: no input provided\n");
+      setColor(YELLOW);
+      printf("Tip: type 'help' for usage\n");
+      setColor(RESET);
+    }
+  } else if (!strcmp(arg[i], "median")) {
+    i++;
+    if (strcmp(arg[i++], "NULL")) {
+      if (strcmp(arg[i], "NULL")) {
+        applyMedianPgm(arg[i-1], arg[i]);
+      } else {
+        removeExtension(arg[i-1], arg[i]);
+        strcat(arg[i], "_median.pgm");
+        applyMedianPgm(arg[i-1], arg[i]);
+      }
+    } else {
+      setColor(RED);
+      printf("Error: no input provided\n");
+      setColor(YELLOW);
+      printf("Tip: type 'help' for usage\n");
+      setColor(RESET);
+    }
   } else if (!strcmp(arg[i], "verprewitt")) {
     i++;
     if (strcmp(arg[i++], "NULL")) {
@@ -371,6 +421,67 @@ int applySobelPgm(char* inputFileName, char* outputFileName) {
   writeArrToPgm(pixelValues, width, height, outputFileName, 2);
   free(pixelValues);
   return 0;
+}
+
+int applyAvgPgm(char* inputFileName, char* outputFileName) {
+  uint8_t *arr, *pixelValues;
+  int width, height, *filteredIntegers, padding, kernelSize = 3;
+  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  if (!arr) {
+    setColor(YELLOW);
+    printf("Trying ASCII pgm format...\n");
+    setColor(RESET);
+    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+  }
+  if (!arr)
+    return 1;
+  filteredIntegers = applyAveraging(arr, width, height, true);
+  free(arr);
+  padding = (kernelSize>>1);
+  pixelValues = filterSlice(filteredIntegers, width-padding*2, height-padding*2);
+  free(filteredIntegers);
+  pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
+  writeArrToPgm(pixelValues, width, height, outputFileName, 2);
+  free(pixelValues);
+  return 0;
+}
+
+/*
+* Function: applyAveraging
+* --------------------------
+* returns a pointer to an array with averaging filter applied
+*
+* pixelValues: pointer to the array representing image that will be processed
+* width: image width without padding
+* height: image height without padding
+* postPadding: a bool value indicating whether the padding will be applied
+* before (false) or after (true) kernel
+*
+* returns: a pointer to the newly allocated array after processing
+*/
+int* applyAveraging(uint8_t* pixelValues, int width, int height, bool postPadding) {
+  int staticKernel[3*3] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+  int kernelSize = 3, *kernel, padding, *filteredValues;
+  uint8_t *pixelValuesCopy;
+  if (!doesKernelFit(kernelSize, width, height) && !postPadding) {
+    setColor(RED);
+    printf("Kernel too be big to be applied without pre-padding\n");
+    setColor(RESET);
+    return NULL;
+  }
+  kernel = staticToDynamicKernel(staticKernel, kernelSize);
+  pixelValuesCopy = (uint8_t*) malloc(width * height * sizeof(uint8_t));
+  memcpy(pixelValuesCopy, pixelValues, width*height * sizeof(uint8_t));
+  if (!postPadding) {
+    pixelValuesCopy = addStaticPad(pixelValuesCopy, 0, width, height, kernelSize);
+    padding = (kernelSize>>1);
+  } else {
+    padding = 0;
+  }
+  filteredValues = applyKernelArr(kernel, kernelSize, 0.11111, pixelValuesCopy, width+padding*2, height+padding*2);
+  free(pixelValuesCopy);
+  free(kernel);
+  return filteredValues;
 }
 
 int applyVerPrewittPgm(char* inputFileName, char* outputFileName) {
@@ -685,6 +796,91 @@ int applyKernelPixNoCo(int* kernel, int kernelSize, float coefficient, uint8_t* 
   return result;
 }
 
+int applyMedianPgm(char* inputFileName, char* outputFileName) {
+  uint8_t *arr, *pixelValues;
+  int width, height, padding, kernelSize = 3;
+  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  if (!arr) {
+    setColor(YELLOW);
+    printf("Trying ASCII pgm format...\n");
+    setColor(RESET);
+    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+  }
+  if (!arr)
+    return 1;
+  pixelValues = applyMedian(arr, width, height, true);
+  free(arr);
+  padding = (kernelSize>>1);
+  pixelValues = addStaticPad(pixelValues, 0, width-padding*2, height-padding*2, kernelSize);
+  writeArrToPgm(pixelValues, width, height, outputFileName, 2);
+  free(pixelValues);
+  return 0;
+}
+
+/*
+* Function: applyMedian
+* --------------------------
+* returns a pointer to an array with median filter applied
+*
+* pixelValues: pointer to the array representing image that will be processed
+* width: image width without padding
+* height: image height without padding
+* postPadding: a bool value indicating whether the padding will be applied
+* before (false) or after (true) kernel
+*
+* returns: a pointer to the newly allocated array after processing
+*/
+uint8_t* applyMedian(uint8_t* pixelValues, int width, int height, bool postPadding) {
+  int kernelSize = 3, padding;
+  uint8_t *pixelValuesCopy, *filteredValues;
+  if (!doesKernelFit(kernelSize, width, height) && !postPadding) {
+    setColor(RED);
+    printf("Kernel too be big to be applied without pre-padding\n");
+    setColor(RESET);
+    return NULL;
+  }
+  pixelValuesCopy = (uint8_t*) malloc(width * height * sizeof(uint8_t));
+  memcpy(pixelValuesCopy, pixelValues, width*height * sizeof(uint8_t));
+  if (!postPadding) {
+    pixelValuesCopy = addStaticPad(pixelValuesCopy, 0, width, height, kernelSize);
+    padding = (kernelSize>>1);
+  } else {
+    padding = 0;
+  }
+  filteredValues = applyMedianArr(kernelSize, pixelValuesCopy, width+padding*2, height+padding*2);
+  free(pixelValuesCopy);
+  return filteredValues;
+}
+
+uint8_t* applyMedianArr(int kernelSize, uint8_t* pixelValues, int width, int height) {
+  uint8_t* outputArr;
+  int padding, areaWidth, areaHeight;
+  size_t i, j;
+  uint8_t* arr = (uint8_t*) malloc(kernelSize*kernelSize*sizeof(uint8_t));
+  padding = kernelSize >> 1;
+  areaWidth = width - padding*2;
+  areaHeight = height - padding*2;
+  outputArr = (uint8_t*) malloc(areaWidth * areaHeight * sizeof(int));
+  for (i = 0; i < areaHeight; i++) {
+    for (j = 0; j < areaWidth; j++)
+      outputArr[i*areaWidth+j] = getMedianForPix(arr, kernelSize, pixelValues, width, i+padding, j+padding);
+  }
+  return outputArr;
+}
+
+uint getMedianForPix(uint8_t* arr, int kernelSize, uint8_t* pixelValues, int width, size_t xLoc, size_t yLoc) {
+  size_t i, j;
+  int kernelPadding, row;
+  kernelPadding = kernelSize >> 1;
+  for (i = 0; i < kernelSize; i++) {
+    row = xLoc+i-kernelPadding;
+    for (j = 0; j < kernelSize; j++){
+      arr[i*kernelSize+j] = pixelValues[(yLoc+j-kernelPadding)+row*width];
+    }
+  }
+  return findMedian(arr, kernelSize*kernelSize);
+}
+
 /*
 * Function: filterSlice
 * --------------------------
@@ -890,6 +1086,12 @@ void skipComments(FILE* file) {
   free(lineHolder);
 }
 
+void swap(uint8_t* a, uint8_t* b) {
+  uint8_t temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
 /*
 * Function: staticToDynamic
 * --------------------------
@@ -919,6 +1121,63 @@ int* staticToDynamicKernel(int arr[], int kernelSize) {
 */
 bool doesKernelFit(int kernelSize, int width, int height) {
   return width > kernelSize && height > kernelSize;
+}
+
+/* QUICK SELECT FUNCTION */
+int partition(uint8_t* arr, int l, int r) {
+    uint8_t lst = arr[r], i = l, j = l;
+    while (j < r) {
+        if (arr[j] < lst) {
+            swap(arr + i, arr + j);
+            i++;
+        }
+        j++;
+    }
+    swap(arr+i, arr+r);
+    return i;
+}
+
+int randomPartition(uint8_t* arr, int l, int r) {
+    int n = r - l + 1;
+    int pivot = rand() % n;
+    swap(&arr[l + pivot], &arr[r]);
+    return partition(arr, l, r);
+}
+
+// Utility function to find median
+void medianUtil(uint8_t* arr, int l, int r, int k, int *a, int *b) {
+    if (l <= r) {
+        int partitionIndex = randomPartition(arr, l, r);
+        if (partitionIndex == k) {
+            *b = (int) arr[partitionIndex];
+            if (*a != -1)
+                return;
+        }
+        else if (partitionIndex == k - 1) {
+            *a = (int) arr[partitionIndex];
+            if (*b != -1)
+                return;
+        }
+        if (partitionIndex >= k)
+            return medianUtil(arr, l, partitionIndex - 1, k, a, b);
+        else
+            return medianUtil(arr, partitionIndex + 1, r, k, a, b);
+    }
+}
+
+uint8_t findMedian(uint8_t* arr, int n)
+{
+    int a = -1, b = -1;
+    uint8_t median;
+    if (n % 2 == 1) {
+        medianUtil(arr, 0, n - 1,
+                   n / 2, &a, &b);
+        median = (uint8_t) b;
+    } else {
+        medianUtil(arr, 0, n - 1, n / 2, &a, &b);
+        median = (uint8_t) ((a + b) / 2);
+    }
+    return median;
 }
 
 //functions that are defined differently based on platform
