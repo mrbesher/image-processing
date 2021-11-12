@@ -953,52 +953,31 @@ uint8_t* filterMinMax(int* arrValues, int width, int height) {
 * returns: a bool value indicating failure as false and success as true
 */
 void setPaddingMirror(uint8_t* arr, int width, int height, int kernelSize) {
-  size_t i, j, currPixLoc, rowWidth;
+  size_t i, j, leftPixLoc, rightPixLoc;
   int padding = kernelSize >> 1;
-  rowWidth = padding*2+width;
-  // set top-left padding
-  currPixLoc = (padding*2+width)*padding+padding;
+  int widthNoPad = width - padding*2, heightNoPad = height - padding*2;
+  // set padded rows before image
+  leftPixLoc = (width)*padding+padding;
+  rightPixLoc = leftPixLoc + widthNoPad -1;
   for (i = 0; i < padding; i++) {
-    for (j = 0; j < padding; j++)
-      arr[i*(padding*2+width)+j] = arr[currPixLoc];
+    memset(arr+i*(width), arr[leftPixLoc], padding);
+    memcpy(arr+i*(width)+padding, arr+padding*(width)+padding, widthNoPad * sizeof(uint8_t));
+    memset(arr+i*(width)+padding+widthNoPad, arr[rightPixLoc], padding);
   }
-  // set top-right padding
-  currPixLoc = (padding*2+width)*padding+padding+width-1;
-  for (i = 0; i < padding; i++) {
-    for (j = 0; j < padding; j++)
-      arr[i*rowWidth+j+padding+width] = arr[currPixLoc];
+  // set padded borders (right, left)
+  for (j=0; j < heightNoPad; i++,j++) {
+    leftPixLoc = i*width+padding;
+    rightPixLoc = leftPixLoc + widthNoPad -1;
+    memset(arr+i*(width), arr[leftPixLoc], padding);
+    memset(arr+i*(width)+padding+widthNoPad, arr[rightPixLoc], padding);
   }
-  // set bottom-left padding
-  currPixLoc = (padding*2+width)*(padding+height-1)+padding;
-  for (i = 0; i < padding; i++) {
-    for (j = 0; j < padding; j++)
-      arr[(i+height+padding)*rowWidth+j] = arr[currPixLoc];
-  }
-  // set bottom-right padding
-  currPixLoc = (padding*2+width)*(padding+height-1)+padding+width-1;
-  for (i = 0; i < padding; i++) {
-    for (j = 0; j < padding; j++)
-      arr[(i+padding+height)*rowWidth+width+padding+j] = arr[currPixLoc];
-  }
-  // set top border
-  for (i = 0; i < padding; i++) {
-    for (j = 0; j < width; j++)
-      arr[padding + i*rowWidth +j] = arr[padding + rowWidth*padding + j];
-  }
-  //set bottom border
-  for (i = 0; i < padding; i++) {
-    for (j = 0; j < width; j++)
-      arr[padding + (padding+height+i)*rowWidth +j] = arr[padding + rowWidth*(padding+height-1) + j];
-  }
-  // set left border
-  for (i = 0; i < height; i++) {
-    for (j = 0; j < padding; j++)
-      arr[rowWidth*(i+padding)+j] = arr[rowWidth*(i+padding)+padding];
-  }
-  // set right border
-  for (i = 0; i < height; i++) {
-    for (j = 0; j < padding; j++)
-      arr[rowWidth*(i+padding)+j+padding+width] = arr[rowWidth*(i+padding)+padding+width-1];
+  // set padded rows after the image
+  leftPixLoc = (width)*(height-padding-1)+padding;
+  rightPixLoc = leftPixLoc + widthNoPad -1;
+  for (j=0; j < padding; i++,j++) {
+    memset(arr+i*(width), arr[leftPixLoc], padding);
+    memcpy(arr+i*(width)+padding, arr+(height-padding-1)*(width)+padding, widthNoPad * sizeof(uint8_t));
+    memset(arr+i*(width)+padding+widthNoPad, arr[rightPixLoc], padding);
   }
 }
 
