@@ -20,7 +20,7 @@
 #define INPUT_SIZE 500
 #define MAX_ARG_NUMBER 5
 #define PADDING_VALUE 0
-#define MAGIC_NUMBER_SIZE 3
+#define MAGIC_NUMBER_SIZE 2
 #define MAX_PIXEL_VAL 255
 #define BRAND_NAME "Besher"
 
@@ -1006,7 +1006,6 @@ bool isBinaryPgm(FILE* file) {
   char* typeHolder = (char*) malloc(LINE_SIZE * sizeof(char));
   fread(typeHolder, sizeof(char), MAGIC_NUMBER_SIZE, file);
   typeHolder[MAGIC_NUMBER_SIZE] = '\0';
-  strtok(typeHolder, "\n");
   if (strcmp(typeHolder, "P5")) {
     free(typeHolder);
     return false;
@@ -1019,7 +1018,6 @@ bool isAsciiPgm(FILE* file) {
   char* typeHolder = (char*) malloc(LINE_SIZE * sizeof(char));
   fread(typeHolder, sizeof(char), MAGIC_NUMBER_SIZE, file);
   typeHolder[MAGIC_NUMBER_SIZE] = '\0';
-  strtok(typeHolder, "\n");
   if (strcmp(typeHolder, "P2")) {
     free(typeHolder);
     return false;
