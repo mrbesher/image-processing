@@ -95,7 +95,7 @@ int* applyCustomKernel(mask*, float, uint8_t*, int, int, bool);
 int applyMedianPgm(char*, char*);
 uint8_t* applyMedian(uint8_t*, int, int, bool);
 uint8_t* applyMedianArr(int, uint8_t*, int, int);
-uint getMedianForPix(uint8_t*, int, uint8_t*, int, size_t, size_t);
+uint8_t getMedianForPix(uint8_t*, int, uint8_t*, int, size_t, size_t);
 
 
 int main(int argc, char const *argv[]) {
@@ -868,7 +868,7 @@ uint8_t* applyMedianArr(int kernelSize, uint8_t* pixelValues, int width, int hei
   return outputArr;
 }
 
-uint getMedianForPix(uint8_t* arr, int kernelSize, uint8_t* pixelValues, int width, size_t xLoc, size_t yLoc) {
+uint8_t getMedianForPix(uint8_t* arr, int kernelSize, uint8_t* pixelValues, int width, size_t xLoc, size_t yLoc) {
   size_t i, j;
   int kernelPadding, row;
   kernelPadding = kernelSize >> 1;
