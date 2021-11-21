@@ -70,8 +70,8 @@ bool writeArrToPgm(uint8_t*, int, int, char*, int);
 //program-specific functions
 uint8_t* allocArrWithPad(int, int, int);
 size_t fwritePixels(const void*, size_t, size_t, FILE*);
-uint8_t* rBinaryPgmPad(char*, int*, int*, int);
-uint8_t* rAsciiPgmPad(char*, int*, int*, int);
+uint8_t* rBinaryPgm(char*, int*, int*);
+uint8_t* rAsciiPgm(char*, int*, int*);
 int* applyKernelArr(int*, int, float, uint8_t*, int, int);
 int applyKernelPixWithCo(int*, int, float, uint8_t*, int, size_t, size_t);
 int applyKernelPixNoCo(int*, int, float, uint8_t*, int, size_t, size_t);
@@ -320,12 +320,12 @@ int processCustomKernel(char* inputFileName, char* outputFileName) {
 int applyCustomKernelPgm(mask* kernel, kernel_settings* settings, char* inputFileName, char* outputFileName) {
   uint8_t *arr, *pixelValues;
   int width, height, *filteredIntegers, padding, kernelSize = 3;
-  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  arr = rBinaryPgm(inputFileName, &width, &height);
   if (!arr) {
     setColor(YELLOW);
     printf("Trying ASCII pgm format...\n");
     setColor(RESET);
-    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+    arr = rAsciiPgm(inputFileName, &width, &height);
   }
   if (!arr)
     return 1;
@@ -390,12 +390,12 @@ int applySobelPgm(char* inputFileName, char* outputFileName) {
   int width, height, widthNoPad, heightNoPad, xDirValue, yDirValue, *verPrewittArr,
       *horPrewittArr, *filteredIntegers, padding, kernelSize = 3;
   size_t i, j;
-  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  arr = rBinaryPgm(inputFileName, &width, &height);
   if (!arr) {
     setColor(YELLOW);
     printf("Trying ASCII pgm format...\n");
     setColor(RESET);
-    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+    arr = rAsciiPgm(inputFileName, &width, &height);
   }
   if (!arr)
     return 1;
@@ -426,12 +426,12 @@ int applySobelPgm(char* inputFileName, char* outputFileName) {
 int applyAvgPgm(char* inputFileName, char* outputFileName) {
   uint8_t *arr, *pixelValues;
   int width, height, *filteredIntegers, padding, kernelSize = 3;
-  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  arr = rBinaryPgm(inputFileName, &width, &height);
   if (!arr) {
     setColor(YELLOW);
     printf("Trying ASCII pgm format...\n");
     setColor(RESET);
-    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+    arr = rAsciiPgm(inputFileName, &width, &height);
   }
   if (!arr)
     return 1;
@@ -487,12 +487,12 @@ int* applyAveraging(uint8_t* pixelValues, int width, int height, bool postPaddin
 int applyVerPrewittPgm(char* inputFileName, char* outputFileName) {
   uint8_t *arr, *pixelValues;
   int width, height, *filteredIntegers, padding, kernelSize = 3;
-  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  arr = rBinaryPgm(inputFileName, &width, &height);
   if (!arr) {
     setColor(YELLOW);
     printf("Trying ASCII pgm format...\n");
     setColor(RESET);
-    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+    arr = rAsciiPgm(inputFileName, &width, &height);
   }
   if (!arr)
     return 1;
@@ -583,16 +583,10 @@ int* applyPrewittHorizontal(uint8_t* pixelValues, int width, int height, bool po
   return filteredValues;
 }
 
-uint8_t* rBinaryPgmPad(char* fileName, int* width, int* height, int kernelSize) {
+uint8_t* rBinaryPgm(char* fileName, int* width, int* height) {
   FILE* picture;
   uint8_t* pixelValues;
   int numberHolder;
-  if (kernelSize < MIN_KERNEL_SIZE && kernelSize % 2) {
-    setColor(RED);
-    printf("Error: kernel size must be >= %d and odd", MIN_KERNEL_SIZE);
-    setColor(RESET);
-    return NULL;
-  }
   if (!(picture = fopen(fileName, "rb"))) {
     setColor(RED);
     printf("Couldn't read %s\nProbably doesn't exist\n", fileName);
@@ -622,24 +616,14 @@ uint8_t* rBinaryPgmPad(char* fileName, int* width, int* height, int kernelSize) 
   }
   fread(pixelValues, sizeof(uint8_t), (*width) * (*height), picture);
   fclose(picture);
-  if (kernelSize) {
-    return addStaticPad(pixelValues, 0, *width, *height, kernelSize);
-  } else {
-    return pixelValues;
-  }
+  return pixelValues;
 }
 
-uint8_t* rAsciiPgmPad(char* fileName, int* width, int* height, int kernelSize) {
+uint8_t* rAsciiPgm(char* fileName, int* width, int* height) {
   FILE* picture;
   uint8_t* pixelValues;
   size_t i = 0;
   int numberHolder;
-  if (kernelSize < MIN_KERNEL_SIZE && kernelSize % 2) {
-    setColor(RED);
-    printf("Error: kernel size must be >= %d and odd", MIN_KERNEL_SIZE);
-    setColor(RESET);
-    return NULL;
-  }
   if (!(picture = fopen(fileName, "rb"))) {
     setColor(RED);
     printf("Couldn't read %s\nProbably doesn't exist\n", fileName);
@@ -684,11 +668,7 @@ uint8_t* rAsciiPgmPad(char* fileName, int* width, int* height, int kernelSize) {
     return NULL;
   }
   fclose(picture);
-  if (kernelSize) {
-    return addStaticPad(pixelValues, 0, *width, *height, kernelSize);
-  } else {
-    return pixelValues;
-  }
+  return pixelValues;
 }
 
 uint8_t* allocArrWithPad(int width, int height, int kernelSize) {
@@ -799,12 +779,12 @@ int applyKernelPixNoCo(int* kernel, int kernelSize, float coefficient, uint8_t* 
 int applyMedianPgm(char* inputFileName, char* outputFileName) {
   uint8_t *arr, *pixelValues;
   int width, height, padding, kernelSize = 3;
-  arr = rBinaryPgmPad(inputFileName, &width, &height, 0);
+  arr = rBinaryPgm(inputFileName, &width, &height);
   if (!arr) {
     setColor(YELLOW);
     printf("Trying ASCII pgm format...\n");
     setColor(RESET);
-    arr = rAsciiPgmPad(inputFileName, &width, &height, 0);
+    arr = rAsciiPgm(inputFileName, &width, &height);
   }
   if (!arr)
     return 1;
@@ -865,6 +845,7 @@ uint8_t* applyMedianArr(int kernelSize, uint8_t* pixelValues, int width, int hei
     for (j = 0; j < areaWidth; j++)
       outputArr[i*areaWidth+j] = getMedianForPix(arr, kernelSize, pixelValues, width, i+padding, j+padding);
   }
+  free(arr);
   return outputArr;
 }
 
