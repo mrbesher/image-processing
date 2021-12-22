@@ -95,15 +95,15 @@ def retrieve_similar_images(filepath, limit=5, db='db.json'):
         imgobj = to_similarity_obj(img, (r, g, b, hue))
 
         attr = 'rgb'
-        if imgobj[attr] > min(similar[attr], key=lambda x: x[attr])[attr]:
-            if len(similar[attr]) >= limit:
-                similar[attr].remove(min(similar[attr], key=lambda x: x[attr]))
+        mini = min(similar[attr], key=lambda x: x[attr])
+        if imgobj[attr] > mini[attr]:
+            similar[attr].remove(mini)
             similar[attr].append(imgobj)
 
         attr = 'hue'
-        if imgobj[attr] > min(similar[attr], key=lambda x: x[attr])[attr]:
-            if len(similar[attr]) >= limit:
-                similar[attr].remove(min(similar[attr], key=lambda x: x[attr]))
+        mini = min(similar[attr], key=lambda x: x[attr])
+        if imgobj[attr] > mini[attr]:
+            similar[attr].remove(mini)
             similar[attr].append(imgobj)
     
     similar['hue'].sort(key=lambda x: x['hue'], reverse=True)
@@ -128,3 +128,15 @@ def get_accuracy_category(category, directory='assets', offset=20, limit=10):
         succhue += any(x['tag'] == category for x in similar['hue'])
         succrgb += any(x['tag'] == category for x in similar['rgb'])
     return (succrgb/limit, succhue/limit)
+
+def print_accuracy_categories(categories=['elephant', 'flamingo', 'kangaroo', 'leopards', 'octopus', 'seahorse']):    
+    print("category: (rgb accuracy, hue accuracy)")
+    total = []
+    for cat in categories:
+        curr = get_accuracy_category(cat)
+        total.append(curr)
+        print("{}: {}".format(cat,curr))
+
+    # sum all categories success rates and divide it by the number of categories to get the general accuracy
+    curr = (sum(x for x,_ in total) / len(categories), sum(y for _,y in total) / len(categories))
+    print("General: {}".format(tuple([round(x, 5) for x in curr])))
